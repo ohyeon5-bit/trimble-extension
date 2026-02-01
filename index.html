@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>GUID Select</title>
+    <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+    <style>
+          * { box-sizing: border-box; margin: 0; padding: 0; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 12px; background: #f5f5f5; }
+          .container { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+          h3 { font-size: 16px; margin-bottom: 12px; color: #333; }
+          .input-group { margin-bottom: 10px; }
+          label { display: block; font-size: 11px; color: #666; margin-bottom: 3px; }
+          input { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+          input:focus { outline: none; border-color: #0066cc; }
+          .btn { width: 100%; padding: 10px; border: none; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 6px; }
+          .btn-primary { background: #0066cc; color: white; }
+          .btn-primary:hover { background: #0052a3; }
+          .btn-success { background: #28a745; color: white; }
+          .btn-success:hover { background: #218838; }
+          .btn:disabled { background: #ccc; cursor: not-allowed; }
+          .btn-row { display: flex; gap: 6px; }
+          .btn-row .btn { flex: 1; margin-bottom: 0; }
+          .status { margin-top: 10px; padding: 8px; border-radius: 4px; font-size: 12px; display: none; }
+          .status.success { background: #d4edda; color: #155724; display: block; }
+          .status.error { background: #f8d7da; color: #721c24; display: block; }
+          .status.info { background: #d1ecf1; color: #0c5460; display: block; }
+          .divider { height: 1px; background: #eee; margin: 12px 0; }
+          .info-box { background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 12px; margin-top: 10px; }
+          .info-box strong { color: #333; }
+          .info-box .guid { font-size: 10px; color: #666; word-break: break-all; }
+        </style>
+  </head>
+  <body>
+      <div class="container">
+            <h3>GUID Select</h3>
+          <div class="input-group">
+                <label>GUID (IFC)</label>
+                <input type="text" id="guidInput" placeholder="04th4YBaOYx6Dg65UHJ4MxU">
+          </div>div>
+          <button class="btn btn-primary" id="selectBtn" disabled onclick="selectByGUID()">Select</button>button>
+          <div class="btn-row">
+                <button class="btn btn-success" onclick="isolate()">Isolate</button>button>
+                <button class="btn btn-success" onclick="fitView()">Fit</button>button>
+          </div>div>
+          <div class="divider"></div>div>
+          <div class="input-group">
+                <label>View Title</label>
+                <input type="text" id="viewTitle" placeholder="C4">
+          </div>div>
+          <button class="btn btn-primary" onclick="createView()" style="background:#6c757d;">Save View</button>button>
+          <div id="status" class="status"></div>div>
+          <div id="selectedInfo" class="info-box" style="display:none;">
+                <strong>Selected:</strong> <span id="selName">-</span>span>
+                <div class="guid" id="selGuid">-</div>div>
+          </div>div>
+      </div>div>
+    <script>
+          let API = null;
+          let modelId = null;
+          function showStatus(msg, type) {
+                  const s = document.getElementById('status');
+                  s.className = 'status ' + type;
+                  s.textContent = msg;
+          }
+          async function init() {
+                  try {
+                            showStatus('Connecting...', 'info');
+                            API = await TrimbleConnectWorkspace.connect(window.parent, onEvent, 30000);
+                            const models = await API.viewer.getModels();
+                            if (models && models.length > 0) {
+                                        modelId = models[0].id;
+                                        showStatus('Connected! Models: ' + models.length, 'success');
+                                        document.getElementById('selectBtn').disabled = false;
+                            } else {
+                                        showStatus('Connected (no models)', 'info');
+                            }
+                  } catch (e) {
+                            showStatus('Error: ' + e.message, 'error');
+                  }
+          }
+          function onEvent(event, data) {
+                  if (event === 'viewer.selectionChanged' && data && data.length > 0) {
+                            updateSelection(data);
+                  }
+          }
+          async function updateSelection(data) {
+                  try {
+                            const sel = data[0];
+                            if (sel && sel.objectRuntimeIds && sel.objectRuntimeIds.length > 0) {
+                                        const props = await API.viewer.getObjectProperties(sel.modelId, [sel.objectRuntimeIds[0]]);
+                                        if (props && props[0] && props[0].properties) {
+                                                      const name = props[0].properties.find(p => p.name === 'Name')?.value || '-';
+                                                      const guid = props[0].properties.find(p => p.name === 'GUID')?.value || '-';
+                                                      document.getElementById('selName').textContent = name;
+                                                      document.getElementById('selGuid').textContent = guid;
+                                                      document.getElementById('selectedInfo').style.display = 'block';
+                                                      document.getElementById('guidInput').value = guid;
+                                                      if (!document.getElementById('viewTitle').value) {
+                                                                      document.getElementById('viewTitle').value = name;
+                                                      }
+                                        }
+                            }
+                  } catch (e) { console.error(e); }
+          }
+          async function selectByGUID() {
+                  const guid = document.getElementById('guidInput').value.trim();
+                  if (!guid || !API || !modelId) return;
+                  try {
+                            showStatus('Searching...', 'info');
+                            const runtimeIds = await API.viewer.convertToObjectRuntimeIds(modelId, [guid]);
+                            if (!runtimeIds || !runtimeIds[0]) {
+                                        showStatus('GUID not found', 'error');
+                                        return;
+                            }
+                            await API.viewer.setSelection({
+                                        modelObjectIds: [{ modelId: modelId, objectRuntimeIds: runtimeIds }]
+                            }, 'set');
+                            showStatus('Selected!', 'success');
+                  } catch (e) {
+                            showStatus('Error: ' + e.message, 'error');
+                  }
+          }
+          async function isolate() {
+                  if (!API) return;
+                  try {
+                            await API.viewer.isolateEntities();
+                            showStatus('Isolated', 'success');
+                  } catch (e) { showStatus('Error: ' + e.message, 'error'); }
+          }
+          async function fitView() {
+                  if (!API) return;
+                  try {
+                            const sel = await API.viewer.getSelection();
+                            if (sel && sel.length > 0) {
+                                        await API.viewer.fitToView(sel);
+                                        showStatus('Fit to view', 'success');
+                            }
+                  } catch (e) { showStatus('Error: ' + e.message, 'error'); }
+          }
+         <!DOCTYPE html>
+           <html lang="ko">
+           <head>
+             <meta charset="UTF-8">
+             <meta name="viewport" content="width=device-width, initial-scale=1.0">
+             <title>GUID Select</title>
+        <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+      <style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 12px; background: #f5f5f5; }
+        
+    </script></strong></label></label></h3>
+  </body>
+    </style></title>
+  </head>
