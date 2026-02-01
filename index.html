@@ -1,156 +1,658 @@
 <!DOCTYPE html>
 <html lang="ko">
-  <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>GUID Select</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     <style>
-          * { box-sizing: border-box; margin: 0; padding: 0; }
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 12px; background: #f5f5f5; }
-          .container { background: white; border-radius: 8px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-          h3 { font-size: 16px; margin-bottom: 12px; color: #333; }
-          .input-group { margin-bottom: 10px; }
-          label { display: block; font-size: 11px; color: #666; margin-bottom: 3px; }
-          input { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
-          input:focus { outline: none; border-color: #0066cc; }
-          .btn { width: 100%; padding: 10px; border: none; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; margin-bottom: 6px; }
-          .btn-primary { background: #0066cc; color: white; }
-          .btn-primary:hover { background: #0052a3; }
-          .btn-success { background: #28a745; color: white; }
-          .btn-success:hover { background: #218838; }
-          .btn:disabled { background: #ccc; cursor: not-allowed; }
-          .btn-row { display: flex; gap: 6px; }
-          .btn-row .btn { flex: 1; margin-bottom: 0; }
-          .status { margin-top: 10px; padding: 8px; border-radius: 4px; font-size: 12px; display: none; }
-          .status.success { background: #d4edda; color: #155724; display: block; }
-          .status.error { background: #f8d7da; color: #721c24; display: block; }
-          .status.info { background: #d1ecf1; color: #0c5460; display: block; }
-          .divider { height: 1px; background: #eee; margin: 12px 0; }
-          .info-box { background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 12px; margin-top: 10px; }
-          .info-box strong { color: #333; }
-          .info-box .guid { font-size: 10px; color: #666; word-break: break-all; }
-        </style>
-  </head>
-  <body>
-      <div class="container">
-            <h3>GUID Select</h3>
-          <div class="input-group">
-                <label>GUID (IFC)</label>
-                <input type="text" id="guidInput" placeholder="04th4YBaOYx6Dg65UHJ4MxU">
-          </div>div>
-          <button class="btn btn-primary" id="selectBtn" disabled onclick="selectByGUID()">Select</button>button>
-          <div class="btn-row">
-                <button class="btn btn-success" onclick="isolate()">Isolate</button>button>
-                <button class="btn btn-success" onclick="fitView()">Fit</button>button>
-          </div>div>
-          <div class="divider"></div>div>
-          <div class="input-group">
-                <label>View Title</label>
-                <input type="text" id="viewTitle" placeholder="C4">
-          </div>div>
-          <button class="btn btn-primary" onclick="createView()" style="background:#6c757d;">Save View</button>button>
-          <div id="status" class="status"></div>div>
-          <div id="selectedInfo" class="info-box" style="display:none;">
-                <strong>Selected:</strong> <span id="selName">-</span>span>
-                <div class="guid" id="selGuid">-</div>div>
-          </div>div>
-      </div>div>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 12px;
+            background: #f5f5f5;
+            font-size: 13px;
+        }
+        .container { max-width: 100%; }
+        h3 {
+            color: #333;
+            margin-bottom: 12px;
+            font-size: 15px;
+            border-bottom: 2px solid #0066cc;
+            padding-bottom: 8px;
+        }
+        .input-group { margin-bottom: 12px; }
+        label {
+            display: block;
+            margin-bottom: 4px;
+            color: #555;
+            font-weight: 500;
+            font-size: 12px;
+        }
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+            font-family: monospace;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #0066cc;
+            box-shadow: 0 0 0 2px rgba(0,102,204,0.2);
+        }
+        .btn-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+        }
+        .btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #0066cc;
+            color: white;
+        }
+        .btn-primary:hover { background: #0052a3; }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        .btn-success:hover { background: #1e7e34; }
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        .btn-secondary:hover { background: #545b62; }
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        .btn-warning:hover { background: #e0a800; }
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+        .btn-danger:hover { background: #c82333; }
+        .status {
+            margin: 10px 0;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        .status-success { background: #d4edda; color: #155724; }
+        .status-error { background: #f8d7da; color: #721c24; }
+        .status-info { background: #cce5ff; color: #004085; }
+        .status-warning { background: #fff3cd; color: #856404; }
+        .divider {
+            height: 1px;
+            background: #ddd;
+            margin: 15px 0;
+        }
+        .section-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .guid-list {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 8px;
+            margin-bottom: 10px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .guid-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 6px;
+            background: #f8f9fa;
+            border-radius: 3px;
+            margin-bottom: 4px;
+            font-family: monospace;
+            font-size: 11px;
+        }
+        .guid-item:last-child { margin-bottom: 0; }
+        .guid-item .name {
+            color: #0066cc;
+            font-weight: 500;
+            margin-right: 8px;
+        }
+        .guid-item .guid-text {
+            color: #666;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .guid-item .remove-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            padding: 2px 6px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        .progress-container {
+            margin: 10px 0;
+            display: none;
+        }
+        .progress-bar {
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #0066cc;
+            width: 0%;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 11px;
+        }
+        .log-area {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .log-area .log-success { color: #4ec9b0; }
+        .log-area .log-error { color: #f14c4c; }
+        .log-area .log-info { color: #569cd6; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3>GUID View Creator</h3>
+
+        <!-- 연결 상태 -->
+        <div id="status" class="status status-info">연결 중...</div>
+
+        <!-- 단일 GUID 입력 섹션 -->
+        <div class="section-title">1. GUID 입력</div>
+        <div class="input-group">
+            <label>GUID (IFC)</label>
+            <input type="text" id="guidInput" placeholder="예: 0_LFwz9FLCMv7rVtemIvgn">
+        </div>
+        <div class="input-group">
+            <label>뷰 이름 (선택)</label>
+            <input type="text" id="viewTitle" placeholder="자동: 객체 이름 사용">
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-primary" id="selectBtn" disabled onclick="selectByGUID()">선택</button>
+            <button class="btn btn-secondary" id="isolateBtn" disabled onclick="isolate()">격리</button>
+            <button class="btn btn-secondary" id="fitBtn" disabled onclick="fitView()">뷰맞춤</button>
+            <button class="btn btn-success" id="saveViewBtn" disabled onclick="saveView()">뷰저장</button>
+        </div>
+
+        <div class="btn-row">
+            <button class="btn btn-warning" id="addToListBtn" disabled onclick="addToList()">목록에 추가</button>
+            <button class="btn btn-secondary" onclick="getSelectedInfo()">선택정보</button>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- 다중 GUID 섹션 -->
+        <div class="section-title">2. 다중 뷰 생성</div>
+        <div class="input-group">
+            <label>GUID 목록 (줄바꿈으로 구분)</label>
+            <textarea id="multiGuidInput" placeholder="GUID1&#10;GUID2&#10;GUID3"></textarea>
+        </div>
+        <div class="btn-row">
+            <button class="btn btn-primary" id="parseGuidsBtn" disabled onclick="parseGuids()">목록 파싱</button>
+            <button class="btn btn-danger" onclick="clearList()">목록 초기화</button>
+        </div>
+
+        <!-- GUID 목록 표시 -->
+        <div id="guidListContainer" class="hidden">
+            <div class="section-title">등록된 GUID (<span id="guidCount">0</span>개)</div>
+            <div id="guidList" class="guid-list"></div>
+            <div class="btn-row">
+                <button class="btn btn-success" id="createAllViewsBtn" onclick="createAllViews()">전체 뷰 생성</button>
+            </div>
+        </div>
+
+        <!-- 진행 상태 -->
+        <div id="progressContainer" class="progress-container">
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill">0%</div>
+            </div>
+        </div>
+
+        <!-- 로그 -->
+        <div id="logArea" class="log-area hidden"></div>
+    </div>
+
     <script>
-          let API = null;
-          let modelId = null;
-          function showStatus(msg, type) {
-                  const s = document.getElementById('status');
-                  s.className = 'status ' + type;
-                  s.textContent = msg;
-          }
-          async function init() {
-                  try {
-                            showStatus('Connecting...', 'info');
-                            API = await TrimbleConnectWorkspace.connect(window.parent, onEvent, 30000);
-                            const models = await API.viewer.getModels();
-                            if (models && models.length > 0) {
-                                        modelId = models[0].id;
-                                        showStatus('Connected! Models: ' + models.length, 'success');
-                                        document.getElementById('selectBtn').disabled = false;
-                            } else {
-                                        showStatus('Connected (no models)', 'info');
-                            }
-                  } catch (e) {
-                            showStatus('Error: ' + e.message, 'error');
-                  }
-          }
-          function onEvent(event, data) {
-                  if (event === 'viewer.selectionChanged' && data && data.length > 0) {
-                            updateSelection(data);
-                  }
-          }
-          async function updateSelection(data) {
-                  try {
-                            const sel = data[0];
-                            if (sel && sel.objectRuntimeIds && sel.objectRuntimeIds.length > 0) {
-                                        const props = await API.viewer.getObjectProperties(sel.modelId, [sel.objectRuntimeIds[0]]);
-                                        if (props && props[0] && props[0].properties) {
-                                                      const name = props[0].properties.find(p => p.name === 'Name')?.value || '-';
-                                                      const guid = props[0].properties.find(p => p.name === 'GUID')?.value || '-';
-                                                      document.getElementById('selName').textContent = name;
-                                                      document.getElementById('selGuid').textContent = guid;
-                                                      document.getElementById('selectedInfo').style.display = 'block';
-                                                      document.getElementById('guidInput').value = guid;
-                                                      if (!document.getElementById('viewTitle').value) {
-                                                                      document.getElementById('viewTitle').value = name;
-                                                      }
-                                        }
-                            }
-                  } catch (e) { console.error(e); }
-          }
-          async function selectByGUID() {
-                  const guid = document.getElementById('guidInput').value.trim();
-                  if (!guid || !API || !modelId) return;
-                  try {
-                            showStatus('Searching...', 'info');
-                            const runtimeIds = await API.viewer.convertToObjectRuntimeIds(modelId, [guid]);
-                            if (!runtimeIds || !runtimeIds[0]) {
-                                        showStatus('GUID not found', 'error');
-                                        return;
-                            }
-                            await API.viewer.setSelection({
-                                        modelObjectIds: [{ modelId: modelId, objectRuntimeIds: runtimeIds }]
-                            }, 'set');
-                            showStatus('Selected!', 'success');
-                  } catch (e) {
-                            showStatus('Error: ' + e.message, 'error');
-                  }
-          }
-          async function isolate() {
-                  if (!API) return;
-                  try {
-                            await API.viewer.isolateEntities();
-                            showStatus('Isolated', 'success');
-                  } catch (e) { showStatus('Error: ' + e.message, 'error'); }
-          }
-          async function fitView() {
-                  if (!API) return;
-                  try {
-                            const sel = await API.viewer.getSelection();
-                            if (sel && sel.length > 0) {
-                                        await API.viewer.fitToView(sel);
-                                        showStatus('Fit to view', 'success');
-                            }
-                  } catch (e) { showStatus('Error: ' + e.message, 'error'); }
-          }
-         <!DOCTYPE html>
-           <html lang="ko">
-           <head>
-             <meta charset="UTF-8">
-             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-             <title>GUID Select</title>
-        <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
-      <style>
-            * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 12px; background: #f5f5f5; }
-        
-    </script></strong></label></label></h3>
-  </body>
-    </style></title>
-  </head>
+        let API = null;
+        let modelId = null;
+        let currentSelection = null;
+        let guidQueue = []; // { guid, name }
+
+        // 상태 업데이트
+        function showStatus(msg, type = 'info') {
+            const status = document.getElementById('status');
+            status.className = 'status status-' + type;
+            status.textContent = msg;
+        }
+
+        // 로그 추가
+        function log(msg, type = 'info') {
+            const logArea = document.getElementById('logArea');
+            logArea.classList.remove('hidden');
+            const line = document.createElement('div');
+            line.className = 'log-' + type;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logArea.appendChild(line);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        // 진행 표시
+        function showProgress(percent, text) {
+            const container = document.getElementById('progressContainer');
+            const fill = document.getElementById('progressFill');
+            container.style.display = 'block';
+            fill.style.width = percent + '%';
+            fill.textContent = text || (percent + '%');
+        }
+
+        function hideProgress() {
+            document.getElementById('progressContainer').style.display = 'none';
+        }
+
+        // 버튼 활성화
+        function enableButtons() {
+            document.getElementById('selectBtn').disabled = false;
+            document.getElementById('isolateBtn').disabled = false;
+            document.getElementById('fitBtn').disabled = false;
+            document.getElementById('saveViewBtn').disabled = false;
+            document.getElementById('addToListBtn').disabled = false;
+            document.getElementById('parseGuidsBtn').disabled = false;
+        }
+
+        // API 이벤트 핸들러
+        function onEvent(event, data) {
+            if (event === 'viewer.selectionChanged' && data && data.length > 0) {
+                currentSelection = data;
+                updateSelectionInfo(data);
+            }
+        }
+
+        // 선택 정보 업데이트
+        async function updateSelectionInfo(data) {
+            try {
+                const sel = data[0];
+                if (sel && sel.objectRuntimeIds && sel.objectRuntimeIds.length > 0) {
+                    const props = await API.viewer.getObjectProperties(sel.modelId, [sel.objectRuntimeIds[0]]);
+                    if (props && props[0] && props[0].properties) {
+                        const name = props[0].properties.find(p => p.name === 'Name')?.value || '';
+                        const guid = props[0].properties.find(p => p.name === 'GUID')?.value || '';
+
+                        if (guid) {
+                            document.getElementById('guidInput').value = guid;
+                        }
+                        if (name && !document.getElementById('viewTitle').value) {
+                            document.getElementById('viewTitle').value = name;
+                        }
+
+                        log(`선택됨: ${name} (${guid})`, 'success');
+                    }
+                }
+            } catch (e) {
+                console.error('Selection info error:', e);
+            }
+        }
+
+        // API 초기화
+        async function init() {
+            try {
+                showStatus('Trimble Connect에 연결 중...', 'info');
+                log('API 연결 시작...', 'info');
+
+                API = await TrimbleConnectWorkspace.connect(window.parent, onEvent, 30000);
+                const model = await API.viewer.getModels();
+
+                if (model && model.length > 0) {
+                    modelId = model[0].id;
+                    showStatus(`연결됨! 모델: ${model.length}개`, 'success');
+                    log(`모델 로드 완료: ${model[0].id}`, 'success');
+                    enableButtons();
+                } else {
+                    showStatus('모델을 찾을 수 없습니다', 'warning');
+                    log('모델 없음', 'error');
+                }
+            } catch (e) {
+                showStatus('연결 실패: ' + e.message, 'error');
+                log('연결 실패: ' + e.message, 'error');
+            }
+        }
+
+        // GUID로 객체 선택
+        async function selectByGUID() {
+            const guid = document.getElementById('guidInput').value.trim();
+            if (!guid || !API || !modelId) {
+                showStatus('GUID를 입력하세요', 'warning');
+                return null;
+            }
+
+            try {
+                showStatus('검색 중...', 'info');
+                log(`GUID 검색: ${guid}`, 'info');
+
+                const runtimeIds = await API.viewer.convertToObjectRuntimeIds(modelId, [guid]);
+
+                if (!runtimeIds || !runtimeIds[0]) {
+                    showStatus('GUID를 찾을 수 없습니다', 'error');
+                    log('GUID 없음: ' + guid, 'error');
+                    return null;
+                }
+
+                await API.viewer.setSelection({
+                    modelObjectIds: [{ modelId: modelId, objectRuntimeIds: runtimeIds }]
+                }, 'set');
+
+                // 객체 이름 가져오기
+                const props = await API.viewer.getObjectProperties(modelId, runtimeIds);
+                let objectName = '';
+                if (props && props[0] && props[0].properties) {
+                    objectName = props[0].properties.find(p => p.name === 'Name')?.value || '';
+                    if (!document.getElementById('viewTitle').value) {
+                        document.getElementById('viewTitle').value = objectName;
+                    }
+                }
+
+                showStatus(`선택됨: ${objectName || guid}`, 'success');
+                log(`선택 완료: ${objectName}`, 'success');
+
+                return { guid, name: objectName, runtimeIds };
+            } catch (e) {
+                showStatus('선택 실패: ' + e.message, 'error');
+                log('선택 실패: ' + e.message, 'error');
+                return null;
+            }
+        }
+
+        // 격리 (선택된 객체만 표시)
+        async function isolate() {
+            if (!API) return;
+            try {
+                await API.viewer.isolateEntities();
+                showStatus('격리 완료', 'success');
+                log('격리 완료', 'success');
+            } catch (e) {
+                showStatus('격리 실패: ' + e.message, 'error');
+                log('격리 실패: ' + e.message, 'error');
+            }
+        }
+
+        // 뷰에 맞춤
+        async function fitView() {
+            if (!API) return;
+            try {
+                const sel = await API.viewer.getSelection();
+                if (sel && sel.length > 0) {
+                    await API.viewer.fitToSelection();
+                    showStatus('뷰 맞춤 완료', 'success');
+                    log('뷰 맞춤 완료', 'success');
+                } else {
+                    showStatus('선택된 객체가 없습니다', 'warning');
+                }
+            } catch (e) {
+                showStatus('뷰 맞춤 실패: ' + e.message, 'error');
+                log('뷰 맞춤 실패: ' + e.message, 'error');
+            }
+        }
+
+        // 뷰 저장
+        async function saveView(customTitle = null) {
+            if (!API) return false;
+
+            const title = customTitle || document.getElementById('viewTitle').value.trim() || 'View_' + Date.now();
+
+            try {
+                showStatus('뷰 저장 중...', 'info');
+                log(`뷰 저장 시작: ${title}`, 'info');
+
+                // 현재 뷰 상태 가져오기
+                const viewState = await API.viewer.getViewState();
+
+                // 뷰 생성
+                const view = await API.view.create({
+                    name: title,
+                    description: title,
+                    viewState: viewState
+                });
+
+                showStatus(`뷰 저장됨: ${title}`, 'success');
+                log(`뷰 저장 완료: ${title} (ID: ${view?.id || 'unknown'})`, 'success');
+                return true;
+            } catch (e) {
+                showStatus('뷰 저장 실패: ' + e.message, 'error');
+                log('뷰 저장 실패: ' + e.message, 'error');
+                return false;
+            }
+        }
+
+        // 선택 정보 가져오기
+        async function getSelectedInfo() {
+            if (!API) return;
+            try {
+                const sel = await API.viewer.getSelection();
+                if (sel && sel.length > 0 && sel[0].objectRuntimeIds) {
+                    const props = await API.viewer.getObjectProperties(sel[0].modelId, sel[0].objectRuntimeIds);
+                    if (props && props[0]) {
+                        const name = props[0].properties?.find(p => p.name === 'Name')?.value || '';
+                        const guid = props[0].properties?.find(p => p.name === 'GUID')?.value || '';
+                        document.getElementById('guidInput').value = guid;
+                        document.getElementById('viewTitle').value = name;
+                        showStatus(`이름: ${name}, GUID: ${guid}`, 'success');
+                        log(`선택 정보 - 이름: ${name}, GUID: ${guid}`, 'info');
+                    }
+                } else {
+                    showStatus('선택된 객체가 없습니다', 'warning');
+                }
+            } catch (e) {
+                showStatus('정보 가져오기 실패: ' + e.message, 'error');
+            }
+        }
+
+        // 목록에 추가
+        function addToList() {
+            const guid = document.getElementById('guidInput').value.trim();
+            const name = document.getElementById('viewTitle').value.trim() || guid.substring(0, 10);
+
+            if (!guid) {
+                showStatus('GUID를 입력하세요', 'warning');
+                return;
+            }
+
+            // 중복 체크
+            if (guidQueue.find(item => item.guid === guid)) {
+                showStatus('이미 추가된 GUID입니다', 'warning');
+                return;
+            }
+
+            guidQueue.push({ guid, name });
+            updateGuidList();
+            showStatus(`목록에 추가됨: ${name}`, 'success');
+            log(`목록 추가: ${name} (${guid})`, 'success');
+
+            // 입력 필드 초기화
+            document.getElementById('guidInput').value = '';
+            document.getElementById('viewTitle').value = '';
+        }
+
+        // 다중 GUID 파싱
+        function parseGuids() {
+            const text = document.getElementById('multiGuidInput').value.trim();
+            if (!text) {
+                showStatus('GUID 목록을 입력하세요', 'warning');
+                return;
+            }
+
+            const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+            let added = 0;
+
+            for (const line of lines) {
+                // 형식: GUID 또는 이름,GUID 또는 이름:GUID
+                let guid, name;
+                if (line.includes(',')) {
+                    [name, guid] = line.split(',').map(s => s.trim());
+                } else if (line.includes(':')) {
+                    [name, guid] = line.split(':').map(s => s.trim());
+                } else {
+                    guid = line;
+                    name = line.substring(0, 15);
+                }
+
+                if (guid && !guidQueue.find(item => item.guid === guid)) {
+                    guidQueue.push({ guid, name: name || guid.substring(0, 15) });
+                    added++;
+                }
+            }
+
+            updateGuidList();
+            showStatus(`${added}개 GUID 추가됨`, 'success');
+            log(`GUID 파싱 완료: ${added}개 추가`, 'success');
+        }
+
+        // GUID 목록 UI 업데이트
+        function updateGuidList() {
+            const container = document.getElementById('guidListContainer');
+            const list = document.getElementById('guidList');
+            const count = document.getElementById('guidCount');
+
+            if (guidQueue.length === 0) {
+                container.classList.add('hidden');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            count.textContent = guidQueue.length;
+
+            list.innerHTML = guidQueue.map((item, index) => `
+                <div class="guid-item">
+                    <span class="name">${item.name}</span>
+                    <span class="guid-text">${item.guid}</span>
+                    <button class="remove-btn" onclick="removeFromList(${index})">X</button>
+                </div>
+            `).join('');
+        }
+
+        // 목록에서 제거
+        function removeFromList(index) {
+            guidQueue.splice(index, 1);
+            updateGuidList();
+        }
+
+        // 목록 초기화
+        function clearList() {
+            guidQueue = [];
+            updateGuidList();
+            showStatus('목록 초기화됨', 'info');
+        }
+
+        // 전체 뷰 생성 (다중 GUID)
+        async function createAllViews() {
+            if (!API || guidQueue.length === 0) {
+                showStatus('생성할 GUID가 없습니다', 'warning');
+                return;
+            }
+
+            const total = guidQueue.length;
+            let success = 0;
+            let failed = 0;
+
+            log(`===== 다중 뷰 생성 시작: ${total}개 =====`, 'info');
+            showProgress(0, `0/${total}`);
+
+            for (let i = 0; i < guidQueue.length; i++) {
+                const item = guidQueue[i];
+                const progress = Math.round(((i + 1) / total) * 100);
+                showProgress(progress, `${i + 1}/${total}`);
+
+                try {
+                    // 1. GUID로 선택
+                    document.getElementById('guidInput').value = item.guid;
+                    document.getElementById('viewTitle').value = item.name;
+
+                    const result = await selectByGUID();
+                    if (!result) {
+                        failed++;
+                        log(`실패 [${i + 1}/${total}]: ${item.name} - 객체를 찾을 수 없음`, 'error');
+                        continue;
+                    }
+
+                    // 2. 격리
+                    await isolate();
+                    await sleep(300);
+
+                    // 3. 뷰 맞춤
+                    await fitView();
+                    await sleep(300);
+
+                    // 4. 뷰 저장
+                    const saved = await saveView(item.name);
+                    if (saved) {
+                        success++;
+                        log(`성공 [${i + 1}/${total}]: ${item.name}`, 'success');
+                    } else {
+                        failed++;
+                        log(`실패 [${i + 1}/${total}]: ${item.name} - 저장 실패`, 'error');
+                    }
+
+                    // 다음 작업 전 대기
+                    await sleep(500);
+
+                } catch (e) {
+                    failed++;
+                    log(`에러 [${i + 1}/${total}]: ${item.name} - ${e.message}`, 'error');
+                }
+            }
+
+            hideProgress();
+            showStatus(`완료! 성공: ${success}, 실패: ${failed}`, success === total ? 'success' : 'warning');
+            log(`===== 다중 뷰 생성 완료: 성공 ${success}개, 실패 ${failed}개 =====`, 'info');
+
+            // 성공한 항목 목록에서 제거 옵션
+            if (success > 0 && failed === 0) {
+                clearList();
+            }
+        }
+
+        // 대기 함수
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // 초기화
+        window.onload = init;
+    </script>
+</body>
+</html>
