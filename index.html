@@ -193,6 +193,9 @@
         <!-- 연결 상태 -->
         <div id="status" class="status status-info">연결 중...</div>
 
+        <!-- 모델 정보 -->
+        <div id="modelInfo" class="status status-info hidden" style="font-size: 11px; margin-bottom: 8px;"></div>
+
         <!-- 단일 GUID 입력 섹션 -->
         <div class="section-title">1. GUID 입력</div>
         <div class="input-group">
@@ -214,6 +217,7 @@
         <div class="btn-row">
             <button class="btn btn-warning" id="addToListBtn" disabled onclick="addToList()">목록에 추가</button>
             <button class="btn btn-secondary" onclick="getSelectedInfo()">선택정보</button>
+            <button class="btn btn-secondary" onclick="debugAPI()">API 디버그</button>
         </div>
 
         <div class="divider"></div>
@@ -329,6 +333,9 @@
             }
         }
 
+        // 모든 모델 정보 저장
+        let allModels = [];
+
         // API 초기화
         async function init() {
             try {
@@ -336,12 +343,24 @@
                 log('API 연결 시작...', 'info');
 
                 API = await TrimbleConnectWorkspace.connect(window.parent, onEvent, 30000);
-                const model = await API.viewer.getModels();
+                allModels = await API.viewer.getModels();
 
-                if (model && model.length > 0) {
-                    modelId = model[0].id;
-                    showStatus(`연결됨! 모델: ${model.length}개`, 'success');
-                    log(`모델 로드 완료: ${model[0].id}`, 'success');
+                if (allModels && allModels.length > 0) {
+                    modelId = allModels[0].id;
+                    showStatus(`연결됨! 모델: ${allModels.length}개`, 'success');
+
+                    // 모델 정보 표시
+                    const modelInfo = document.getElementById('modelInfo');
+                    modelInfo.classList.remove('hidden');
+                    modelInfo.innerHTML = allModels.map((m, i) =>
+                        `<div style="margin-bottom: 2px;">[${i}] <strong>${m.name || 'Unknown'}</strong> - ID: ${m.id}</div>`
+                    ).join('');
+
+                    log(`모델 ${allModels.length}개 로드됨:`, 'success');
+                    allModels.forEach((m, i) => {
+                        log(`  [${i}] ${m.name || 'Unknown'} (${m.id})`, 'info');
+                    });
+
                     enableButtons();
                 } else {
                     showStatus('모델을 찾을 수 없습니다', 'warning');
@@ -353,63 +372,126 @@
             }
         }
 
-        // GUID로 객체 선택
+        // IFC GUID 변환 (압축 <-> 비압축)
+        // IFC 압축 GUID: 22자 Base64 (예: 0_LFwz9FLCMv7rVtemIvgn)
+        // 비압축 GUID: 36자 (예: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)
+        function convertIfcGuid(guid) {
+            // Base64 IFC 문자셋
+            const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
+
+            if (guid.length === 22) {
+                // 압축 → 비압축
+                let result = '';
+                for (let i = 0; i < 22; i++) {
+                    const idx = chars.indexOf(guid[i]);
+                    if (idx < 0) return null;
+                    result += idx.toString(2).padStart(6, '0');
+                }
+                // 128비트 → 32 hex
+                let hex = '';
+                for (let i = 0; i < 128; i += 4) {
+                    hex += parseInt(result.substr(i, 4), 2).toString(16);
+                }
+                // UUID 형식으로 변환
+                return `${hex.substr(0, 8)}-${hex.substr(8, 4)}-${hex.substr(12, 4)}-${hex.substr(16, 4)}-${hex.substr(20, 12)}`;
+            } else if (guid.length === 36 && guid.includes('-')) {
+                // 비압축 → 압축
+                const hex = guid.replace(/-/g, '');
+                if (hex.length !== 32) return null;
+                let binary = '';
+                for (const c of hex) {
+                    binary += parseInt(c, 16).toString(2).padStart(4, '0');
+                }
+                // 128비트 → 22문자
+                binary = binary.padStart(132, '0'); // 22 * 6 = 132
+                let result = '';
+                for (let i = 0; i < 132; i += 6) {
+                    result += chars[parseInt(binary.substr(i, 6), 2)];
+                }
+                return result;
+            }
+            return guid; // 변환 불가
+        }
+
+        // GUID로 객체 선택 (모든 모델에서 검색)
         async function selectByGUID() {
-            const guid = document.getElementById('guidInput').value.trim();
-            if (!guid || !API || !modelId) {
+            const inputGuid = document.getElementById('guidInput').value.trim();
+            if (!inputGuid || !API) {
                 showStatus('GUID를 입력하세요', 'warning');
                 return null;
             }
 
             try {
                 showStatus('검색 중...', 'info');
-                log(`GUID 검색: ${guid}`, 'info');
-                log(`모델 ID: ${modelId}`, 'info');
+                log(`=== GUID 검색 시작 ===`, 'info');
+                log(`입력 GUID: ${inputGuid} (길이: ${inputGuid.length})`, 'info');
 
-                // convertToObjectRuntimeIds 호출 결과 디버깅
-                const result = await API.viewer.convertToObjectRuntimeIds(modelId, [guid]);
-                log(`API 결과: ${JSON.stringify(result)}`, 'info');
+                // GUID 형식 변환 시도 (압축 ↔ 비압축)
+                const convertedGuid = convertIfcGuid(inputGuid);
+                const guidsToTry = [inputGuid];
+                if (convertedGuid && convertedGuid !== inputGuid) {
+                    guidsToTry.push(convertedGuid);
+                    log(`변환된 GUID: ${convertedGuid}`, 'info');
+                }
 
-                // 결과 형식 확인 및 처리
-                let runtimeIds = null;
-                if (Array.isArray(result) && result.length > 0) {
-                    // 배열인 경우 첫 번째 요소 사용
-                    if (Array.isArray(result[0])) {
-                        runtimeIds = result[0];
-                    } else {
-                        runtimeIds = result;
+                // 모든 모델에서 검색
+                for (const model of allModels) {
+                    log(`모델 검색: ${model.name || model.id}`, 'info');
+
+                    for (const guid of guidsToTry) {
+                        log(`  시도: ${guid}`, 'info');
+
+                        try {
+                            const result = await API.viewer.convertToObjectRuntimeIds(model.id, [guid]);
+                            log(`  결과: ${JSON.stringify(result)}`, 'info');
+
+                            // 유효한 결과 확인
+                            let runtimeIds = null;
+                            if (Array.isArray(result)) {
+                                // 숫자 배열이면 바로 사용
+                                if (result.length > 0 && typeof result[0] === 'number') {
+                                    runtimeIds = result;
+                                }
+                                // 중첩 배열이면 첫 번째 요소 사용
+                                else if (result.length > 0 && Array.isArray(result[0])) {
+                                    runtimeIds = result[0];
+                                }
+                            }
+
+                            if (runtimeIds && runtimeIds.length > 0 && runtimeIds[0] !== undefined) {
+                                log(`  ✓ 발견! runtimeIds: [${runtimeIds.join(', ')}]`, 'success');
+
+                                // 현재 모델 ID 업데이트
+                                modelId = model.id;
+
+                                await API.viewer.setSelection({
+                                    modelObjectIds: [{ modelId: model.id, objectRuntimeIds: runtimeIds }]
+                                }, 'set');
+
+                                // 객체 이름 가져오기
+                                const props = await API.viewer.getObjectProperties(model.id, runtimeIds);
+                                let objectName = '';
+                                if (props && props[0] && props[0].properties) {
+                                    objectName = props[0].properties.find(p => p.name === 'Name')?.value || '';
+                                    if (!document.getElementById('viewTitle').value) {
+                                        document.getElementById('viewTitle').value = objectName;
+                                    }
+                                }
+
+                                showStatus(`선택됨: ${objectName || guid}`, 'success');
+                                log(`선택 완료: ${objectName} (모델: ${model.name || model.id})`, 'success');
+
+                                return { guid: inputGuid, name: objectName, runtimeIds, modelId: model.id };
+                            }
+                        } catch (innerErr) {
+                            log(`  에러: ${innerErr.message}`, 'error');
+                        }
                     }
-                } else if (result && typeof result === 'object') {
-                    // 객체인 경우
-                    runtimeIds = result.objectRuntimeIds || result.runtimeIds || result;
                 }
 
-                log(`runtimeIds: ${JSON.stringify(runtimeIds)}`, 'info');
-
-                if (!runtimeIds || runtimeIds.length === 0) {
-                    showStatus('GUID를 찾을 수 없습니다', 'error');
-                    log('GUID 없음: ' + guid, 'error');
-                    return null;
-                }
-
-                await API.viewer.setSelection({
-                    modelObjectIds: [{ modelId: modelId, objectRuntimeIds: runtimeIds }]
-                }, 'set');
-
-                // 객체 이름 가져오기
-                const props = await API.viewer.getObjectProperties(modelId, runtimeIds);
-                let objectName = '';
-                if (props && props[0] && props[0].properties) {
-                    objectName = props[0].properties.find(p => p.name === 'Name')?.value || '';
-                    if (!document.getElementById('viewTitle').value) {
-                        document.getElementById('viewTitle').value = objectName;
-                    }
-                }
-
-                showStatus(`선택됨: ${objectName || guid}`, 'success');
-                log(`선택 완료: ${objectName}`, 'success');
-
-                return { guid, name: objectName, runtimeIds };
+                showStatus('GUID를 찾을 수 없습니다', 'error');
+                log('모든 모델에서 GUID를 찾지 못함', 'error');
+                return null;
             } catch (e) {
                 showStatus('선택 실패: ' + e.message, 'error');
                 log('선택 실패: ' + e.message, 'error');
@@ -669,6 +751,71 @@
         // 대기 함수
         function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        // API 디버그 - 사용 가능한 메서드와 현재 상태 출력
+        async function debugAPI() {
+            if (!API) {
+                log('API 연결 안됨', 'error');
+                return;
+            }
+
+            log('=== API 디버그 시작 ===', 'info');
+
+            // viewer API 메서드 목록
+            const viewerMethods = Object.keys(API.viewer || {}).filter(k => typeof API.viewer[k] === 'function');
+            log(`API.viewer 메서드 (${viewerMethods.length}개):`, 'info');
+            log(`  ${viewerMethods.join(', ')}`, 'info');
+
+            // view API 메서드 목록
+            if (API.view) {
+                const viewMethods = Object.keys(API.view).filter(k => typeof API.view[k] === 'function');
+                log(`API.view 메서드 (${viewMethods.length}개):`, 'info');
+                log(`  ${viewMethods.join(', ')}`, 'info');
+            }
+
+            // 현재 선택 상태
+            try {
+                const selection = await API.viewer.getSelection();
+                log(`현재 선택: ${JSON.stringify(selection)}`, 'info');
+
+                if (selection && selection.length > 0 && selection[0].objectRuntimeIds?.length > 0) {
+                    const sel = selection[0];
+                    log(`  모델: ${sel.modelId}`, 'info');
+                    log(`  runtimeIds: [${sel.objectRuntimeIds.join(', ')}]`, 'info');
+
+                    // 선택된 객체의 모든 속성 출력
+                    const props = await API.viewer.getObjectProperties(sel.modelId, [sel.objectRuntimeIds[0]]);
+                    if (props && props[0] && props[0].properties) {
+                        log(`  속성 (${props[0].properties.length}개):`, 'info');
+                        props[0].properties.forEach(p => {
+                            log(`    ${p.name}: ${p.value}`, 'info');
+                        });
+
+                        // GUID 필드 확인
+                        const guidProp = props[0].properties.find(p =>
+                            p.name.toLowerCase().includes('guid') ||
+                            p.name.toLowerCase().includes('globalid') ||
+                            p.name.toLowerCase().includes('ifcguid')
+                        );
+                        if (guidProp) {
+                            log(`  ★ GUID 발견: ${guidProp.name} = ${guidProp.value}`, 'success');
+                        }
+                    }
+
+                    // 역변환 테스트 (runtimeId → objectId)
+                    try {
+                        const objectIds = await API.viewer.convertToObjectIds(sel.modelId, sel.objectRuntimeIds);
+                        log(`  convertToObjectIds 결과: ${JSON.stringify(objectIds)}`, 'info');
+                    } catch (e) {
+                        log(`  convertToObjectIds 에러: ${e.message}`, 'error');
+                    }
+                }
+            } catch (e) {
+                log(`선택 정보 에러: ${e.message}`, 'error');
+            }
+
+            log('=== API 디버그 완료 ===', 'info');
         }
 
         // 초기화
