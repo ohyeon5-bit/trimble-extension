@@ -364,10 +364,29 @@
             try {
                 showStatus('검색 중...', 'info');
                 log(`GUID 검색: ${guid}`, 'info');
+                log(`모델 ID: ${modelId}`, 'info');
 
-                const runtimeIds = await API.viewer.convertToObjectRuntimeIds(modelId, [guid]);
+                // convertToObjectRuntimeIds 호출 결과 디버깅
+                const result = await API.viewer.convertToObjectRuntimeIds(modelId, [guid]);
+                log(`API 결과: ${JSON.stringify(result)}`, 'info');
 
-                if (!runtimeIds || !runtimeIds[0]) {
+                // 결과 형식 확인 및 처리
+                let runtimeIds = null;
+                if (Array.isArray(result) && result.length > 0) {
+                    // 배열인 경우 첫 번째 요소 사용
+                    if (Array.isArray(result[0])) {
+                        runtimeIds = result[0];
+                    } else {
+                        runtimeIds = result;
+                    }
+                } else if (result && typeof result === 'object') {
+                    // 객체인 경우
+                    runtimeIds = result.objectRuntimeIds || result.runtimeIds || result;
+                }
+
+                log(`runtimeIds: ${JSON.stringify(runtimeIds)}`, 'info');
+
+                if (!runtimeIds || runtimeIds.length === 0) {
                     showStatus('GUID를 찾을 수 없습니다', 'error');
                     log('GUID 없음: ' + guid, 'error');
                     return null;
@@ -394,6 +413,7 @@
             } catch (e) {
                 showStatus('선택 실패: ' + e.message, 'error');
                 log('선택 실패: ' + e.message, 'error');
+                log('에러 상세: ' + e.stack, 'error');
                 return null;
             }
         }
