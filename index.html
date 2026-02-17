@@ -193,6 +193,11 @@
         <!-- 연결 상태 -->
         <div id="status" class="status status-info">연결 중...</div>
 
+        <!-- 로컬 모드 배너 -->
+        <div id="localModeBanner" class="status status-warning hidden" style="margin-bottom: 8px; font-size: 11px;">
+            ⚠ 로컬 모드 (Trimble Connect 미연결) — UI 테스트 전용
+        </div>
+
         <!-- 모델 정보 -->
         <div id="modelInfo" class="status status-info hidden" style="font-size: 11px; margin-bottom: 8px;"></div>
 
@@ -218,6 +223,7 @@
             <button class="btn btn-warning" id="addToListBtn" disabled onclick="addToList()">목록에 추가</button>
             <button class="btn btn-secondary" onclick="getSelectedInfo()">선택정보</button>
             <button class="btn btn-secondary" onclick="debugAPI()">API 디버그</button>
+            <button class="btn btn-secondary" id="localModeBtn" onclick="enableLocalMode()">로컬 모드</button>
         </div>
 
         <div class="divider"></div>
@@ -258,6 +264,7 @@
         let modelId = null;
         let currentSelection = null;
         let guidQueue = []; // { guid, name }
+        let isLocalMode = false;
 
         // 상태 업데이트
         function showStatus(msg, type = 'info') {
@@ -336,6 +343,25 @@
         // 모든 모델 정보 저장
         let allModels = [];
 
+        // 로컬 모드 활성화
+        function enableLocalMode() {
+            isLocalMode = true;
+            API = null;
+            allModels = [{ id: 'local-model-1', name: '로컬 테스트 모델' }];
+            modelId = 'local-model-1';
+
+            document.getElementById('localModeBanner').classList.remove('hidden');
+            document.getElementById('localModeBtn').disabled = true;
+            showStatus('로컬 모드 활성화됨 (테스트 전용)', 'warning');
+
+            const modelInfo = document.getElementById('modelInfo');
+            modelInfo.classList.remove('hidden');
+            modelInfo.innerHTML = '<div style="margin-bottom: 2px;">[0] <strong>로컬 테스트 모델</strong> - ID: local-model-1</div>';
+
+            log('로컬 모드 활성화: Trimble Connect 없이 UI 테스트 가능', 'info');
+            enableButtons();
+        }
+
         // API 초기화
         async function init() {
             try {
@@ -363,12 +389,13 @@
 
                     enableButtons();
                 } else {
-                    showStatus('모델을 찾을 수 없습니다', 'warning');
-                    log('모델 없음', 'error');
+                    showStatus('모델을 찾을 수 없습니다 — 로컬 모드를 사용하세요', 'warning');
+                    log('모델 없음. "로컬 모드" 버튼으로 테스트 가능', 'error');
                 }
             } catch (e) {
-                showStatus('연결 실패: ' + e.message, 'error');
+                showStatus('연결 실패 — 로컬 모드를 사용하세요', 'error');
                 log('연결 실패: ' + e.message, 'error');
+                log('"로컬 모드" 버튼을 눌러 Trimble Connect 없이 테스트하세요', 'info');
             }
         }
 
@@ -416,8 +443,25 @@
         // GUID로 객체 선택 (모든 모델에서 검색)
         async function selectByGUID() {
             const inputGuid = document.getElementById('guidInput').value.trim();
-            if (!inputGuid || !API) {
+            if (!inputGuid) {
                 showStatus('GUID를 입력하세요', 'warning');
+                return null;
+            }
+
+            // 로컬 모드: 실제 API 없이 시뮬레이션
+            if (isLocalMode) {
+                const fakeName = document.getElementById('viewTitle').value.trim() || '로컬 객체';
+                log(`[로컬] GUID 선택 시뮬레이션: ${inputGuid}`, 'info');
+                if (!document.getElementById('viewTitle').value) {
+                    document.getElementById('viewTitle').value = fakeName;
+                }
+                showStatus(`[로컬] 선택됨: ${fakeName}`, 'success');
+                log(`[로컬] 선택 완료: ${fakeName} (GUID: ${inputGuid})`, 'success');
+                return { guid: inputGuid, name: fakeName, runtimeIds: [1], modelId: 'local-model-1' };
+            }
+
+            if (!API) {
+                showStatus('API 연결 안됨. 로컬 모드를 사용하세요', 'warning');
                 return null;
             }
 
@@ -502,6 +546,11 @@
 
         // 격리 (선택된 객체만 표시)
         async function isolate() {
+            if (isLocalMode) {
+                log('[로컬] 격리 시뮬레이션', 'info');
+                showStatus('[로컬] 격리 완료', 'success');
+                return;
+            }
             if (!API) return;
             try {
                 await API.viewer.isolateEntities();
@@ -515,6 +564,11 @@
 
         // 뷰에 맞춤
         async function fitView() {
+            if (isLocalMode) {
+                log('[로컬] 뷰 맞춤 시뮬레이션', 'info');
+                showStatus('[로컬] 뷰 맞춤 완료', 'success');
+                return;
+            }
             if (!API) return;
             try {
                 const sel = await API.viewer.getSelection();
@@ -533,9 +587,16 @@
 
         // 뷰 저장
         async function saveView(customTitle = null) {
-            if (!API) return false;
-
             const title = customTitle || document.getElementById('viewTitle').value.trim() || 'View_' + Date.now();
+
+            if (isLocalMode) {
+                log(`[로컬] 뷰 저장 시뮬레이션: ${title}`, 'info');
+                showStatus(`[로컬] 뷰 저장됨: ${title}`, 'success');
+                log(`[로컬] 뷰 저장 완료: ${title} (ID: local-view-${Date.now()})`, 'success');
+                return true;
+            }
+
+            if (!API) return false;
 
             try {
                 showStatus('뷰 저장 중...', 'info');
@@ -563,6 +624,13 @@
 
         // 선택 정보 가져오기
         async function getSelectedInfo() {
+            if (isLocalMode) {
+                const guid = document.getElementById('guidInput').value.trim() || '로컬-GUID-예시';
+                const name = document.getElementById('viewTitle').value.trim() || '로컬 객체';
+                showStatus(`[로컬] 이름: ${name}, GUID: ${guid}`, 'success');
+                log(`[로컬] 선택 정보 - 이름: ${name}, GUID: ${guid}`, 'info');
+                return;
+            }
             if (!API) return;
             try {
                 const sel = await API.viewer.getSelection();
@@ -755,8 +823,17 @@
 
         // API 디버그 - 사용 가능한 메서드와 현재 상태 출력
         async function debugAPI() {
+            if (isLocalMode) {
+                log('=== 로컬 모드 디버그 ===', 'info');
+                log('isLocalMode: true', 'info');
+                log(`allModels: ${JSON.stringify(allModels)}`, 'info');
+                log(`modelId: ${modelId}`, 'info');
+                log(`guidQueue: ${JSON.stringify(guidQueue)}`, 'info');
+                log('=== 로컬 모드 디버그 완료 ===', 'info');
+                return;
+            }
             if (!API) {
-                log('API 연결 안됨', 'error');
+                log('API 연결 안됨. "로컬 모드" 버튼을 눌러 테스트하세요', 'error');
                 return;
             }
 
